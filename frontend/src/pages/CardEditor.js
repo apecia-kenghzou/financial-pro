@@ -1,0 +1,279 @@
+import React, { useState } from 'react';
+import {
+  Box,
+  Container,
+  Grid,
+  Button,
+  TextField,
+  Typography,
+  Paper,
+  Snackbar,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress,
+} from '@mui/material';
+import SaveIcon from '@mui/icons-material/Save';
+import PublishIcon from '@mui/icons-material/Publish';
+import GetAppIcon from '@mui/icons-material/GetApp';
+import ShareIcon from '@mui/icons-material/Share';
+import CanvasEditor from '../components/CanvasEditor';
+import EventDetailsForm from '../components/EventDetailsForm';
+import { useCardContext } from '../context/CardContext';
+import { invitationAPI } from '../services/api';
+
+const CardEditor = () => {
+  const {
+    currentCard,
+    setCurrentCard,
+    canvasElements,
+    eventDetails,
+    googleSheetId,
+  } = useCardContext();
+
+  const [title, setTitle] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [publishDialog, setPublishDialog] = useState(false);
+  const [shareableLink, setShareableLink] = useState('');
+
+  const handleSave = async () => {
+    if (!title.trim()) {
+      setSnackbar({
+        open: true,
+        message: 'Please enter a title for your invitation',
+        severity: 'error',
+      });
+      return;
+    }
+
+    if (canvasElements.length === 0) {
+      setSnackbar({
+        open: true,
+        message: 'Please add at least one image to your canvas',
+        severity: 'error',
+      });
+      return;
+    }
+
+    if (!eventDetails.location || !eventDetails.dateTime) {
+      setSnackbar({
+        open: true,
+        message: 'Please fill in all required event details',
+        severity: 'error',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = {
+        title,
+        canvasData: {
+          elements: canvasElements,
+          dimensions: { width: 800, height: 600 },
+        },
+        eventDetails,
+        googleSheetId,
+      };
+
+      let response;
+      if (currentCard) {
+        response = await invitationAPI.update(currentCard.cardId, data);
+      } else {
+        response = await invitationAPI.create(data);
+      }
+
+      setCurrentCard(response.data.data);
+      setSnackbar({
+        open: true,
+        message: 'Invitation card saved successfully!',
+        severity: 'success',
+      });
+    } catch (error) {
+      console.error('Error saving card:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to save invitation card',
+        severity: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!currentCard) {
+      setSnackbar({
+        open: true,
+        message: 'Please save your invitation first',
+        severity: 'error',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await invitationAPI.publish(currentCard.cardId);
+      const link = response.data.data.shareableLink;
+      setShareableLink(link);
+      setPublishDialog(true);
+      setSnackbar({
+        open: true,
+        message: 'Invitation published successfully!',
+        severity: 'success',
+      });
+    } catch (error) {
+      console.error('Error publishing card:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to publish invitation card',
+        severity: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportJSON = () => {
+    const exportData = {
+      title,
+      canvasData: {
+        elements: canvasElements,
+        dimensions: { width: 800, height: 600 },
+      },
+      eventDetails,
+      googleSheetId,
+    };
+
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${title || 'invitation'}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    setSnackbar({
+      open: true,
+      message: 'Design exported successfully!',
+      severity: 'success',
+    });
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(shareableLink);
+    setSnackbar({
+      open: true,
+      message: 'Link copied to clipboard!',
+      severity: 'success',
+    });
+  };
+
+  return (
+    <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', py: 4 }}>
+      <Container maxWidth="xl">
+        <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <Typography variant="h4" component="h1" gutterBottom>
+                Create Your Invitation Card
+              </Typography>
+              <TextField
+                fullWidth
+                label="Invitation Title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g., My Wedding Invitation"
+                required
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<GetAppIcon />}
+                  onClick={handleExportJSON}
+                  disabled={canvasElements.length === 0}
+                >
+                  Export JSON
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSave}
+                  disabled={loading}
+                >
+                  {loading ? <CircularProgress size={24} /> : 'Save'}
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  startIcon={<PublishIcon />}
+                  onClick={handlePublish}
+                  disabled={!currentCard || loading}
+                >
+                  Publish
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} lg={8}>
+            <CanvasEditor />
+          </Grid>
+          <Grid item xs={12} lg={4}>
+            <EventDetailsForm />
+          </Grid>
+        </Grid>
+      </Container>
+
+      {/* Publish Dialog */}
+      <Dialog open={publishDialog} onClose={() => setPublishDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ShareIcon color="primary" />
+            Your Invitation is Published!
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Share this link with your guests:
+          </Typography>
+          <Paper sx={{ p: 2, bgcolor: 'grey.100', mt: 2, wordBreak: 'break-all' }}>
+            <Typography variant="body2">{shareableLink}</Typography>
+          </Paper>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPublishDialog(false)}>Close</Button>
+          <Button variant="contained" onClick={handleCopyLink}>
+            Copy Link
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+};
+
+export default CardEditor;
