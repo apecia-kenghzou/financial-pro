@@ -2,6 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const passport = require('./config/passport');
 const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
 const hpp = require('hpp');
@@ -12,8 +15,10 @@ const logger = require('./config/logger');
 const errorHandler = require('./middleware/errorHandler');
 
 // Import routes
+const authRoutes = require('./routes/authRoutes');
 const invitationRoutes = require('./routes/invitationRoutes');
 const rsvpRoutes = require('./routes/rsvpRoutes');
+const googleSheetsRoutes = require('./routes/googleSheetsRoutes');
 
 // Initialize express app
 const app = express();
@@ -23,6 +28,27 @@ connectDB();
 
 // Security middleware - must be first
 app.use(helmet());
+
+// Session configuration - before passport
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    touchAfter: 24 * 3600 // lazy session update (24 hours)
+  }),
+  cookie: {
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production', // HTTPS in production
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+  }
+}));
+
+// Passport initialization
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Rate limiting
 const limiter = rateLimit({
@@ -109,8 +135,10 @@ app.get('/api/health', async (req, res) => {
 });
 
 // API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/rsvp', rsvpRoutes);
+app.use('/api/sheets', googleSheetsRoutes);
 
 // 404 handler - must be after all valid routes
 app.use((req, res, next) => {

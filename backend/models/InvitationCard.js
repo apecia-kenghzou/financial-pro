@@ -10,6 +10,12 @@ const InvitationCardSchema = new mongoose.Schema({
     minlength: [10, 'Card ID must be at least 10 characters'],
     maxlength: [10, 'Card ID must be exactly 10 characters']
   },
+  creator: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Creator is required'],
+    index: true
+  },
   title: {
     type: String,
     required: [true, 'Title is required'],
@@ -69,5 +75,6 @@ const InvitationCardSchema = new mongoose.Schema({
 // Compound indexes for common queries
 InvitationCardSchema.index({ isPublished: 1, createdAt: -1 });
 InvitationCardSchema.index({ createdAt: -1 });
+InvitationCardSchema.index({ creator: 1, createdAt: -1 });
 
 module.exports = mongoose.model('InvitationCard', InvitationCardSchema);

@@ -1,52 +1,52 @@
 const InvitationCard = require('../models/InvitationCard');
 const { nanoid } = require('nanoid');
 const { initializeSheet } = require('../config/googleSheets');
+const asyncHandler = require('../utils/asyncHandler');
+const logger = require('../config/logger');
+const { NotFoundError } = require('../utils/errors');
 
 // Create a new invitation card
-const createInvitationCard = async (req, res) => {
-  try {
-    const { title, canvasData, eventDetails, googleSheetId } = req.body;
+const createInvitationCard = asyncHandler(async (req, res) => {
+  const { title, canvasData, eventDetails, googleSheetId } = req.body;
 
-    // Validate required fields
-    if (!title || !canvasData || !eventDetails) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide title, canvas data, and event details'
-      });
-    }
-
-    // Generate unique card ID
-    const cardId = nanoid(10);
-
-    // If Google Sheet ID is provided, initialize it with headers
-    if (googleSheetId) {
-      await initializeSheet(googleSheetId);
-    }
-
-    const invitationCard = new InvitationCard({
-      cardId,
-      title,
-      canvasData,
-      eventDetails,
-      googleSheetId: googleSheetId || '',
-      isPublished: false
-    });
-
-    await invitationCard.save();
-
-    res.status(201).json({
-      success: true,
-      data: invitationCard
-    });
-  } catch (error) {
-    console.error('Error creating invitation card:', error);
-    res.status(500).json({
+  // Ensure user is authenticated
+  if (!req.user) {
+    return res.status(401).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: 'Authentication required'
     });
   }
-};
+
+  // Generate unique card ID
+  const cardId = nanoid(10);
+
+  // If Google Sheet ID is provided, initialize it with headers using user's tokens
+  if (googleSheetId && req.user.googleTokens) {
+    const result = await initializeSheet(googleSheetId, req.user.googleTokens);
+    if (!result.success) {
+      logger.warn(`Failed to initialize Google Sheet: ${result.error || result.message}`);
+    }
+  }
+
+  const invitationCard = new InvitationCard({
+    cardId,
+    creator: req.user._id,
+    title,
+    canvasData,
+    eventDetails,
+    googleSheetId: googleSheetId || '',
+    isPublished: false
+  });
+
+  await invitationCard.save();
+
+  logger.info(`Invitation card created: ${cardId} by user: ${req.user.email}`);
+
+  res.status(201).json({
+    success: true,
+    data: invitationCard
+  });
+});
 
 // Get invitation card by ID
 const getInvitationCard = async (req, res) => {

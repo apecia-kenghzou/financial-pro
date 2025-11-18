@@ -23,7 +23,11 @@
     "winston": "^3.11.0",
     "morgan": "^1.10.0",
     "compression": "^1.7.4",
-    "validator": "^13.11.0"
+    "validator": "^13.11.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "express-session": "^1.17.3",
+    "connect-mongo": "^5.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
