@@ -7,7 +7,22 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Important for cookies/sessions
 });
+
+// Authentication APIs
+export const authAPI = {
+  getCurrentUser: () => api.get('/auth/me'),
+  logout: () => api.post('/auth/logout'),
+  loginWithGoogle: () => {
+    window.location.href = `${API_BASE_URL.replace('/api', '')}/api/auth/google`;
+  },
+};
+
+// Google Sheets APIs
+export const sheetsAPI = {
+  getMySheets: () => api.get('/sheets/my-sheets'),
+};
 
 // Invitation Card APIs
 export const invitationAPI = {
@@ -23,7 +38,7 @@ export const invitationAPI = {
 export const rsvpAPI = {
   submit: (data) => api.post('/rsvp', data),
   getForCard: (cardId) => api.get(`/rsvp/card/${cardId}`),
-  checkRSVP: (cardId, email) => api.get(`/rsvp/check/${cardId}/${email}`),
+  checkRSVP: (cardId, email) => api.post('/rsvp/check', { cardId, email }),
 };
 
 // Health check

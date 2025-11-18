@@ -1,17 +1,81 @@
 const { google } = require('googleapis');
 const logger = require('./logger');
+const User = require('../models/User');
+
+/**
+ * Refresh access token if expired
+ * @param {String} userId - User ID
+ * @param {Object} userTokens - User's Google OAuth tokens
+ * @returns {Object} Updated tokens or original tokens
+ */
+const refreshTokenIfNeeded = async (userId, userTokens) => {
+  try {
+    // Check if token is expired or will expire in next 5 minutes
+    const now = Date.now();
+    const expiryBuffer = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+    if (!userTokens.expiryDate || now >= userTokens.expiryDate - expiryBuffer) {
+      logger.info(`Refreshing expired token for user: ${userId}`);
+
+      // Create OAuth2 client
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        `${process.env.BACKEND_URL}/api/auth/google/callback`
+      );
+
+      // Set current credentials
+      oauth2Client.setCredentials({
+        refresh_token: userTokens.refreshToken
+      });
+
+      // Refresh the access token
+      const { credentials } = await oauth2Client.refreshAccessToken();
+
+      // Update tokens object
+      const updatedTokens = {
+        accessToken: credentials.access_token,
+        refreshToken: credentials.refresh_token || userTokens.refreshToken,
+        expiryDate: credentials.expiry_date
+      };
+
+      // Update user in database
+      if (userId) {
+        await User.findByIdAndUpdate(userId, {
+          googleTokens: updatedTokens,
+          lastLogin: new Date()
+        });
+        logger.info(`Token refreshed and saved for user: ${userId}`);
+      }
+
+      return updatedTokens;
+    }
+
+    return userTokens;
+  } catch (error) {
+    logger.error('Error refreshing token:', error);
+    // Return original tokens if refresh fails
+    return userTokens;
+  }
+};
 
 /**
  * Get Google Sheets client using user's OAuth tokens
  * @param {Object} userTokens - User's Google OAuth tokens
- * @returns {Object} Google Sheets API client
+ * @param {String} userId - Optional user ID for token refresh
+ * @returns {Object} Object containing sheets client and potentially updated tokens
  */
-const getGoogleSheetsClient = (userTokens) => {
+const getGoogleSheetsClient = async (userTokens, userId = null) => {
   try {
     if (!userTokens || !userTokens.accessToken) {
       logger.warn('No user tokens provided for Google Sheets');
-      return null;
+      return { client: null, tokens: userTokens };
     }
+
+    // Refresh token if needed
+    const refreshedTokens = userId
+      ? await refreshTokenIfNeeded(userId, userTokens)
+      : userTokens;
 
     // Create OAuth2 client
     const oauth2Client = new google.auth.OAuth2(
@@ -20,34 +84,37 @@ const getGoogleSheetsClient = (userTokens) => {
       `${process.env.BACKEND_URL}/api/auth/google/callback`
     );
 
-    // Set credentials
+    // Set credentials with refreshed tokens
     oauth2Client.setCredentials({
-      access_token: userTokens.accessToken,
-      refresh_token: userTokens.refreshToken,
-      expiry_date: userTokens.expiryDate
+      access_token: refreshedTokens.accessToken,
+      refresh_token: refreshedTokens.refreshToken,
+      expiry_date: refreshedTokens.expiryDate
     });
 
     // Create and return sheets client
     const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-    return sheets;
+    return { client: sheets, tokens: refreshedTokens };
   } catch (error) {
     logger.error('Error initializing Google Sheets client:', error);
-    return null;
+    return { client: null, tokens: userTokens };
   }
 };
 
 /**
  * Get list of user's Google Sheets
  * @param {Object} userTokens - User's Google OAuth tokens
- * @returns {Array} List of spreadsheets
+ * @param {String} userId - Optional user ID for token refresh
+ * @returns {Object} Result with list of spreadsheets
  */
-const getUserSheets = async (userTokens) => {
+const getUserSheets = async (userTokens, userId = null) => {
   try {
-    const drive = google.drive({ version: 'v3', auth: getGoogleSheetsClient(userTokens)?._options?.auth });
+    const { client: sheetsClient } = await getGoogleSheetsClient(userTokens, userId);
 
-    if (!drive) {
-      return { success: false, message: 'Failed to initialize Drive client' };
+    if (!sheetsClient || !sheetsClient._options || !sheetsClient._options.auth) {
+      return { success: false, message: 'Failed to initialize Sheets client' };
     }
+
+    const drive = google.drive({ version: 'v3', auth: sheetsClient._options.auth });
 
     const response = await drive.files.list({
       q: "mimeType='application/vnd.google-apps.spreadsheet'",
@@ -62,6 +129,15 @@ const getUserSheets = async (userTokens) => {
     };
   } catch (error) {
     logger.error('Error fetching user sheets:', error);
+
+    // Handle specific error cases
+    if (error.code === 401) {
+      return { success: false, error: 'Authentication failed. Please sign in again.' };
+    }
+    if (error.code === 403) {
+      return { success: false, error: 'Permission denied. Please grant access to Google Drive.' };
+    }
+
     return { success: false, error: error.message };
   }
 };
@@ -71,11 +147,12 @@ const getUserSheets = async (userTokens) => {
  * @param {String} spreadsheetId - Google Sheet ID
  * @param {Object} rsvpData - RSVP data to add
  * @param {Object} userTokens - User's Google OAuth tokens
+ * @param {String} userId - Optional user ID for token refresh
  * @returns {Object} Result of operation
  */
-const addRSVPToSheet = async (spreadsheetId, rsvpData, userTokens) => {
+const addRSVPToSheet = async (spreadsheetId, rsvpData, userTokens, userId = null) => {
   try {
-    const sheets = getGoogleSheetsClient(userTokens);
+    const { client: sheets } = await getGoogleSheetsClient(userTokens, userId);
 
     if (!sheets) {
       logger.warn('Google Sheets client not available, skipping sheet update');
@@ -101,11 +178,15 @@ const addRSVPToSheet = async (spreadsheetId, rsvpData, userTokens) => {
       resource,
     });
 
+    logger.info(`RSVP added to sheet ${spreadsheetId}: ${rsvpData.email}`);
     return { success: true, data: response.data };
   } catch (error) {
     logger.error('Error adding RSVP to Google Sheets:', error);
 
     // Handle specific error cases
+    if (error.code === 401) {
+      return { success: false, error: 'Authentication failed. Token may have expired.' };
+    }
     if (error.code === 403) {
       return { success: false, error: 'Permission denied. Please ensure the sheet is accessible.' };
     }
@@ -121,11 +202,12 @@ const addRSVPToSheet = async (spreadsheetId, rsvpData, userTokens) => {
  * Initialize Google Sheet with headers
  * @param {String} spreadsheetId - Google Sheet ID
  * @param {Object} userTokens - User's Google OAuth tokens
+ * @param {String} userId - Optional user ID for token refresh
  * @returns {Object} Result of operation
  */
-const initializeSheet = async (spreadsheetId, userTokens) => {
+const initializeSheet = async (spreadsheetId, userTokens, userId = null) => {
   try {
-    const sheets = getGoogleSheetsClient(userTokens);
+    const { client: sheets } = await getGoogleSheetsClient(userTokens, userId);
 
     if (!sheets) {
       return { success: false, message: 'Google Sheets client not available' };
@@ -163,6 +245,9 @@ const initializeSheet = async (spreadsheetId, userTokens) => {
   } catch (error) {
     logger.error('Error initializing Google Sheet:', error);
 
+    if (error.code === 401) {
+      return { success: false, error: 'Authentication failed. Please sign in again.' };
+    }
     if (error.code === 403) {
       return { success: false, error: 'Permission denied. Please ensure the sheet is accessible.' };
     }

@@ -10,6 +10,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { useCardContext } from '../context/CardContext';
+import GoogleSheetsSelector from './GoogleSheetsSelector';
 import dayjs from 'dayjs';
 
 const EventDetailsForm = () => {
@@ -72,13 +73,11 @@ const EventDetailsForm = () => {
           <Typography variant="subtitle2" color="text.secondary" gutterBottom>
             Google Sheets Integration (Optional)
           </Typography>
-          <TextField
-            label="Google Sheet ID"
-            fullWidth
+          <GoogleSheetsSelector
             value={googleSheetId}
-            onChange={(e) => setGoogleSheetId(e.target.value)}
-            placeholder="Enter your Google Sheet ID for RSVP tracking"
-            helperText="RSVPs will be automatically added to your Google Sheet"
+            onChange={setGoogleSheetId}
+            label="Select Google Sheet for RSVP Tracking"
+            helperText="RSVPs will be automatically added to your selected Google Sheet"
           />
         </Box>
       </Stack>

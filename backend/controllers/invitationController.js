@@ -22,7 +22,7 @@ const createInvitationCard = asyncHandler(async (req, res) => {
 
   // If Google Sheet ID is provided, initialize it with headers using user's tokens
   if (googleSheetId && req.user.googleTokens) {
-    const result = await initializeSheet(googleSheetId, req.user.googleTokens);
+    const result = await initializeSheet(googleSheetId, req.user.googleTokens, req.user._id.toString());
     if (!result.success) {
       logger.warn(`Failed to initialize Google Sheet: ${result.error || result.message}`);
     }
@@ -48,160 +48,169 @@ const createInvitationCard = asyncHandler(async (req, res) => {
   });
 });
 
-// Get invitation card by ID
-const getInvitationCard = async (req, res) => {
-  try {
-    const { cardId } = req.params;
+// Get invitation card by ID (Public - no auth required)
+const getInvitationCard = asyncHandler(async (req, res) => {
+  const { cardId } = req.params;
 
-    const invitationCard = await InvitationCard.findOne({ cardId });
+  const invitationCard = await InvitationCard.findOne({ cardId }).populate('creator', 'name email picture');
 
-    if (!invitationCard) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invitation card not found'
-      });
-    }
+  if (!invitationCard) {
+    throw new NotFoundError('Invitation card');
+  }
 
-    res.status(200).json({
-      success: true,
-      data: invitationCard
-    });
-  } catch (error) {
-    console.error('Error fetching invitation card:', error);
-    res.status(500).json({
+  res.status(200).json({
+    success: true,
+    data: invitationCard
+  });
+});
+
+// Update invitation card (Protected - requires auth and ownership)
+const updateInvitationCard = asyncHandler(async (req, res) => {
+  const { cardId } = req.params;
+  const { title, canvasData, eventDetails, googleSheetId } = req.body;
+
+  if (!req.user) {
+    return res.status(401).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: 'Authentication required'
     });
   }
-};
 
-// Update invitation card
-const updateInvitationCard = async (req, res) => {
-  try {
-    const { cardId } = req.params;
-    const { title, canvasData, eventDetails, googleSheetId } = req.body;
+  const invitationCard = await InvitationCard.findOne({ cardId });
 
-    const invitationCard = await InvitationCard.findOne({ cardId });
+  if (!invitationCard) {
+    throw new NotFoundError('Invitation card');
+  }
 
-    if (!invitationCard) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invitation card not found'
-      });
-    }
+  // Check ownership
+  if (invitationCard.creator.toString() !== req.user._id.toString()) {
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have permission to update this invitation'
+    });
+  }
 
-    // Update fields
-    if (title) invitationCard.title = title;
-    if (canvasData) invitationCard.canvasData = canvasData;
-    if (eventDetails) invitationCard.eventDetails = eventDetails;
-    if (googleSheetId !== undefined) {
-      invitationCard.googleSheetId = googleSheetId;
-      if (googleSheetId) {
-        await initializeSheet(googleSheetId);
+  // Update fields
+  if (title) invitationCard.title = title;
+  if (canvasData) invitationCard.canvasData = canvasData;
+  if (eventDetails) invitationCard.eventDetails = eventDetails;
+  if (googleSheetId !== undefined) {
+    invitationCard.googleSheetId = googleSheetId;
+    if (googleSheetId && req.user.googleTokens) {
+      const result = await initializeSheet(googleSheetId, req.user.googleTokens, req.user._id.toString());
+      if (!result.success) {
+        logger.warn(`Failed to initialize Google Sheet: ${result.error || result.message}`);
       }
     }
+  }
 
-    await invitationCard.save();
+  await invitationCard.save();
 
-    res.status(200).json({
-      success: true,
-      data: invitationCard
-    });
-  } catch (error) {
-    console.error('Error updating invitation card:', error);
-    res.status(500).json({
+  logger.info(`Invitation card updated: ${cardId} by user: ${req.user.email}`);
+
+  res.status(200).json({
+    success: true,
+    data: invitationCard
+  });
+});
+
+// Publish invitation card (Protected - requires auth and ownership)
+const publishInvitationCard = asyncHandler(async (req, res) => {
+  const { cardId } = req.params;
+
+  if (!req.user) {
+    return res.status(401).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: 'Authentication required'
     });
   }
-};
 
-// Publish invitation card
-const publishInvitationCard = async (req, res) => {
-  try {
-    const { cardId } = req.params;
+  const invitationCard = await InvitationCard.findOne({ cardId });
 
-    const invitationCard = await InvitationCard.findOne({ cardId });
+  if (!invitationCard) {
+    throw new NotFoundError('Invitation card');
+  }
 
-    if (!invitationCard) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invitation card not found'
-      });
+  // Check ownership
+  if (invitationCard.creator.toString() !== req.user._id.toString()) {
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have permission to publish this invitation'
+    });
+  }
+
+  invitationCard.isPublished = true;
+  await invitationCard.save();
+
+  logger.info(`Invitation card published: ${cardId} by user: ${req.user.email}`);
+
+  // Generate shareable link
+  const shareableLink = `${process.env.FRONTEND_URL}/invitation/${cardId}`;
+
+  res.status(200).json({
+    success: true,
+    data: {
+      ...invitationCard.toObject(),
+      shareableLink
     }
+  });
+});
 
-    invitationCard.isPublished = true;
-    await invitationCard.save();
+// Delete invitation card (Protected - requires auth and ownership)
+const deleteInvitationCard = asyncHandler(async (req, res) => {
+  const { cardId } = req.params;
 
-    // Generate shareable link
-    const shareableLink = `${process.env.FRONTEND_URL}/invitation/${cardId}`;
-
-    res.status(200).json({
-      success: true,
-      data: {
-        ...invitationCard.toObject(),
-        shareableLink
-      }
-    });
-  } catch (error) {
-    console.error('Error publishing invitation card:', error);
-    res.status(500).json({
+  if (!req.user) {
+    return res.status(401).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: 'Authentication required'
     });
   }
-};
 
-// Delete invitation card
-const deleteInvitationCard = async (req, res) => {
-  try {
-    const { cardId } = req.params;
+  const invitationCard = await InvitationCard.findOne({ cardId });
 
-    const invitationCard = await InvitationCard.findOneAndDelete({ cardId });
+  if (!invitationCard) {
+    throw new NotFoundError('Invitation card');
+  }
 
-    if (!invitationCard) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invitation card not found'
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Invitation card deleted successfully'
-    });
-  } catch (error) {
-    console.error('Error deleting invitation card:', error);
-    res.status(500).json({
+  // Check ownership
+  if (invitationCard.creator.toString() !== req.user._id.toString()) {
+    return res.status(403).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: 'You do not have permission to delete this invitation'
     });
   }
-};
 
-// Get all invitation cards (for admin/user dashboard)
-const getAllInvitationCards = async (req, res) => {
-  try {
-    const invitationCards = await InvitationCard.find().sort({ createdAt: -1 });
+  await InvitationCard.findOneAndDelete({ cardId });
 
-    res.status(200).json({
-      success: true,
-      count: invitationCards.length,
-      data: invitationCards
-    });
-  } catch (error) {
-    console.error('Error fetching invitation cards:', error);
-    res.status(500).json({
+  logger.info(`Invitation card deleted: ${cardId} by user: ${req.user.email}`);
+
+  res.status(200).json({
+    success: true,
+    message: 'Invitation card deleted successfully'
+  });
+});
+
+// Get all invitation cards for current user (Protected - requires auth)
+const getAllInvitationCards = asyncHandler(async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: 'Authentication required'
     });
   }
-};
+
+  // Only return cards created by the current user
+  const invitationCards = await InvitationCard.find({ creator: req.user._id })
+    .sort({ createdAt: -1 })
+    .select('-__v');
+
+  res.status(200).json({
+    success: true,
+    count: invitationCards.length,
+    data: invitationCards
+  });
+});
 
 module.exports = {
   createInvitationCard,

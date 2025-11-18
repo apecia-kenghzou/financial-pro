@@ -1,12 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
+const { body } = require('express-validator');
 const {
   submitRSVP,
   getRSVPsForCard,
   checkRSVP
 } = require('../controllers/rsvpController');
 const { rsvpValidation, cardIdValidation, validate } = require('../middleware/validation');
+const { isAuthenticated } = require('../middleware/auth');
 
 // Rate limiting for RSVP submission
 const rsvpLimiter = rateLimit({
@@ -20,19 +22,14 @@ const rsvpLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// Submit RSVP
+// Public routes (no authentication required)
 router.post('/', rsvpLimiter, rsvpValidation, validate, submitRSVP);
-
-// Get all RSVPs for a card
-router.get('/card/:cardId', cardIdValidation, validate, getRSVPsForCard);
-
-// Check if email has RSVP'd (changed to POST for security)
 router.post('/check', [
-  ...rsvpValidation.filter(v =>
-    v._validations &&
-    v._validations[0] &&
-    (v._validations[0].field === 'cardId' || v._validations[0].field === 'email')
-  )
+  body('cardId').trim().notEmpty().isLength({ min: 10, max: 10 }),
+  body('email').trim().isEmail().normalizeEmail()
 ], validate, checkRSVP);
+
+// Protected route (requires authentication and ownership)
+router.get('/card/:cardId', isAuthenticated, cardIdValidation, validate, getRSVPsForCard);
 
 module.exports = router;

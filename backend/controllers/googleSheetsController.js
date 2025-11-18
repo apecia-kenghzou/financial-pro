@@ -11,7 +11,7 @@ const getMySheets = asyncHandler(async (req, res) => {
     });
   }
 
-  const result = await getUserSheets(req.user.googleTokens);
+  const result = await getUserSheets(req.user.googleTokens, req.user._id.toString());
 
   if (!result.success) {
     logger.error('Failed to fetch user sheets:', result.error || result.message);

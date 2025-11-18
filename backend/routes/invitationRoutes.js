@@ -9,23 +9,16 @@ const {
   getAllInvitationCards
 } = require('../controllers/invitationController');
 const { invitationValidation, cardIdValidation, validate } = require('../middleware/validation');
+const { isAuthenticated } = require('../middleware/auth');
 
-// Create new invitation card
-router.post('/', invitationValidation, validate, createInvitationCard);
+// Protected routes (require authentication)
+router.post('/', isAuthenticated, invitationValidation, validate, createInvitationCard);
+router.get('/', isAuthenticated, getAllInvitationCards);
+router.put('/:cardId', isAuthenticated, cardIdValidation, validate, updateInvitationCard);
+router.post('/:cardId/publish', isAuthenticated, cardIdValidation, validate, publishInvitationCard);
+router.delete('/:cardId', isAuthenticated, cardIdValidation, validate, deleteInvitationCard);
 
-// Get all invitation cards
-router.get('/', getAllInvitationCards);
-
-// Get specific invitation card
+// Public route (no authentication required)
 router.get('/:cardId', cardIdValidation, validate, getInvitationCard);
-
-// Update invitation card
-router.put('/:cardId', cardIdValidation, validate, updateInvitationCard);
-
-// Publish invitation card
-router.post('/:cardId/publish', cardIdValidation, validate, publishInvitationCard);
-
-// Delete invitation card
-router.delete('/:cardId', cardIdValidation, validate, deleteInvitationCard);
 
 module.exports = router;

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -22,9 +23,12 @@ import ShareIcon from '@mui/icons-material/Share';
 import CanvasEditor from '../components/CanvasEditor';
 import EventDetailsForm from '../components/EventDetailsForm';
 import { useCardContext } from '../context/CardContext';
+import { useUser } from '../context/UserContext';
 import { invitationAPI } from '../services/api';
 
 const CardEditor = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated, loading: authLoading } = useUser();
   const {
     currentCard,
     setCurrentCard,
@@ -38,6 +42,13 @@ const CardEditor = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [publishDialog, setPublishDialog] = useState(false);
   const [shareableLink, setShareableLink] = useState('');
+
+  // Protect route - redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/login', { state: { from: '/create' } });
+    }
+  }, [isAuthenticated, authLoading, navigate]);
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -172,6 +183,20 @@ const CardEditor = () => {
       severity: 'success',
     });
   };
+
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // Don't render if not authenticated (will redirect)
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', py: 4 }}>
