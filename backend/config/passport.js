@@ -29,7 +29,8 @@ passport.use(
       scope: [
         'profile',
         'email',
-        'https://www.googleapis.com/auth/spreadsheets' // Access to Google Sheets
+        'https://www.googleapis.com/auth/spreadsheets', // Access to Google Sheets
+        'https://www.googleapis.com/auth/drive.readonly' // Access to list user's Drive files
       ],
       accessType: 'offline', // Get refresh token
       prompt: 'consent' // Force consent screen to get refresh token every time

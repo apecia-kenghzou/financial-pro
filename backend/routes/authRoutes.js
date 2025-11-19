@@ -11,7 +11,8 @@ router.get('/google', passport.authenticate('google', {
   scope: [
     'profile',
     'email',
-    'https://www.googleapis.com/auth/spreadsheets'
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive.readonly'  // Needed to list user's sheets
   ],
   accessType: 'offline',
   prompt: 'consent'
