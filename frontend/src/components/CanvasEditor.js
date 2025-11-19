@@ -1,8 +1,34 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Stage, Layer, Image as KonvaImage, Rect, Text, Transformer } from 'react-konva';
-import { Box, Paper, Typography, IconButton, Toolbar, Stack, Chip } from '@mui/material';
+import {
+  Box,
+  Paper,
+  Typography,
+  IconButton,
+  Toolbar,
+  Stack,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  ToggleButton,
+  ToggleButtonGroup,
+} from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import TextFieldsIcon from '@mui/icons-material/TextFields';
+import FormatBoldIcon from '@mui/icons-material/FormatBold';
+import FormatItalicIcon from '@mui/icons-material/FormatItalic';
+import FormatAlignLeftIcon from '@mui/icons-material/FormatAlignLeft';
+import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter';
+import FormatAlignRightIcon from '@mui/icons-material/FormatAlignRight';
 import useImage from 'use-image';
 import { useCardContext } from '../context/CardContext';
 
@@ -72,12 +98,81 @@ const CanvasImageElement = ({ element, isSelected, onSelect, onChange }) => {
   );
 };
 
+// Component for rendering text on canvas
+const CanvasTextElement = ({ element, isSelected, onSelect, onChange, onDoubleClick }) => {
+  const shapeRef = useRef();
+  const trRef = useRef();
+
+  useEffect(() => {
+    if (isSelected && trRef.current && shapeRef.current) {
+      trRef.current.nodes([shapeRef.current]);
+      trRef.current.getLayer().batchDraw();
+    }
+  }, [isSelected]);
+
+  return (
+    <>
+      <Text
+        ref={shapeRef}
+        text={element.content || 'Double-click to edit'}
+        x={element.x}
+        y={element.y}
+        fontSize={element.fontSize || 24}
+        fontFamily={element.fontFamily || 'Arial'}
+        fill={element.color || '#000000'}
+        fontStyle={`${element.bold ? 'bold' : ''} ${element.italic ? 'italic' : ''}`.trim()}
+        align={element.align || 'left'}
+        width={element.width || 300}
+        draggable
+        onClick={onSelect}
+        onTap={onSelect}
+        onDblClick={onDoubleClick}
+        onDblTap={onDoubleClick}
+        onDragEnd={(e) => {
+          onChange({
+            ...element,
+            x: e.target.x(),
+            y: e.target.y(),
+          });
+        }}
+        onTransformEnd={() => {
+          const node = shapeRef.current;
+          const scaleX = node.scaleX();
+
+          node.scaleX(1);
+          node.scaleY(1);
+
+          onChange({
+            ...element,
+            x: node.x(),
+            y: node.y(),
+            width: Math.max(50, node.width() * scaleX),
+          });
+        }}
+      />
+      {isSelected && (
+        <Transformer
+          ref={trRef}
+          enabledAnchors={['middle-left', 'middle-right']}
+          boundBoxFunc={(oldBox, newBox) => {
+            if (newBox.width < 50) {
+              return oldBox;
+            }
+            return newBox;
+          }}
+        />
+      )}
+    </>
+  );
+};
+
 const CanvasEditor = () => {
   const {
     canvasElements,
     setCanvasElements,
     updateCanvasElement,
     removeCanvasElement,
+    addCanvasElement,
     A4_DIMENSIONS,
     currentPageIndex,
     pages,
@@ -86,6 +181,10 @@ const CanvasEditor = () => {
   const [selectedId, setSelectedId] = useState(null);
   const stageRef = useRef();
   const fileInputRef = useRef();
+
+  // Text editing state
+  const [textEditDialog, setTextEditDialog] = useState(false);
+  const [editingText, setEditingText] = useState(null);
 
   // Calculate scale to fit canvas in viewport while maintaining A4 ratio
   const [scale, setScale] = useState(0.6);
@@ -179,6 +278,38 @@ const CanvasEditor = () => {
     }
   };
 
+  const handleAddText = () => {
+    const newTextElement = {
+      id: `text-${Date.now()}`,
+      type: 'text',
+      content: 'Double-click to edit',
+      x: A4_DIMENSIONS.width / 2 - 150,
+      y: A4_DIMENSIONS.height / 2 - 50,
+      width: 300,
+      fontSize: 24,
+      fontFamily: 'Arial',
+      color: '#000000',
+      bold: false,
+      italic: false,
+      align: 'left',
+    };
+
+    addCanvasElement(newTextElement);
+  };
+
+  const handleTextDoubleClick = (element) => {
+    setEditingText(element);
+    setTextEditDialog(true);
+  };
+
+  const handleTextSave = () => {
+    if (editingText) {
+      updateCanvasElement(editingText.id, editingText);
+    }
+    setTextEditDialog(false);
+    setEditingText(null);
+  };
+
   const checkDeselect = (e) => {
     const clickedOnEmpty = e.target === e.target.getStage();
     if (clickedOnEmpty) {
@@ -230,6 +361,13 @@ const CanvasEditor = () => {
               title="Upload image"
             >
               <CloudUploadIcon />
+            </IconButton>
+            <IconButton
+              color="primary"
+              onClick={handleAddText}
+              title="Add text"
+            >
+              <TextFieldsIcon />
             </IconButton>
             <IconButton
               color="error"
@@ -306,17 +444,33 @@ const CanvasEditor = () => {
                 />
 
                 {/* Render current page elements */}
-                {canvasElements.map((element) => (
-                  <CanvasImageElement
-                    key={element.id}
-                    element={element}
-                    isSelected={element.id === selectedId}
-                    onSelect={() => setSelectedId(element.id)}
-                    onChange={(newAttrs) => {
-                      updateCanvasElement(element.id, newAttrs);
-                    }}
-                  />
-                ))}
+                {canvasElements.map((element) => {
+                  if (element.type === 'text') {
+                    return (
+                      <CanvasTextElement
+                        key={element.id}
+                        element={element}
+                        isSelected={element.id === selectedId}
+                        onSelect={() => setSelectedId(element.id)}
+                        onChange={(newAttrs) => {
+                          updateCanvasElement(element.id, newAttrs);
+                        }}
+                        onDoubleClick={() => handleTextDoubleClick(element)}
+                      />
+                    );
+                  }
+                  return (
+                    <CanvasImageElement
+                      key={element.id}
+                      element={element}
+                      isSelected={element.id === selectedId}
+                      onSelect={() => setSelectedId(element.id)}
+                      onChange={(newAttrs) => {
+                        updateCanvasElement(element.id, newAttrs);
+                      }}
+                    />
+                  );
+                })}
               </Layer>
             </Stage>
           </Box>
@@ -344,6 +498,126 @@ const CanvasEditor = () => {
           )}
         </Box>
       </Paper>
+
+      {/* Text Edit Dialog */}
+      <Dialog
+        open={textEditDialog}
+        onClose={() => setTextEditDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Text</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Stack spacing={3}>
+            <TextField
+              fullWidth
+              label="Text Content"
+              multiline
+              rows={3}
+              value={editingText?.content || ''}
+              onChange={(e) => setEditingText({ ...editingText, content: e.target.value })}
+            />
+
+            <FormControl fullWidth>
+              <InputLabel>Font Family</InputLabel>
+              <Select
+                value={editingText?.fontFamily || 'Arial'}
+                label="Font Family"
+                onChange={(e) => setEditingText({ ...editingText, fontFamily: e.target.value })}
+              >
+                <MenuItem value="Arial">Arial</MenuItem>
+                <MenuItem value="Helvetica">Helvetica</MenuItem>
+                <MenuItem value="Times New Roman">Times New Roman</MenuItem>
+                <MenuItem value="Georgia">Georgia</MenuItem>
+                <MenuItem value="Courier New">Courier New</MenuItem>
+                <MenuItem value="Verdana">Verdana</MenuItem>
+                <MenuItem value="Comic Sans MS">Comic Sans MS</MenuItem>
+                <MenuItem value="Impact">Impact</MenuItem>
+              </Select>
+            </FormControl>
+
+            <TextField
+              fullWidth
+              type="number"
+              label="Font Size"
+              value={editingText?.fontSize || 24}
+              onChange={(e) => setEditingText({ ...editingText, fontSize: parseInt(e.target.value) })}
+              InputProps={{ inputProps: { min: 12, max: 96 } }}
+            />
+
+            <Box>
+              <Typography variant="caption" color="text.secondary" gutterBottom>
+                Text Color
+              </Typography>
+              <TextField
+                fullWidth
+                type="color"
+                value={editingText?.color || '#000000'}
+                onChange={(e) => setEditingText({ ...editingText, color: e.target.value })}
+              />
+            </Box>
+
+            <Box>
+              <Typography variant="caption" color="text.secondary" gutterBottom>
+                Style
+              </Typography>
+              <ToggleButtonGroup
+                value={[
+                  editingText?.bold ? 'bold' : null,
+                  editingText?.italic ? 'italic' : null,
+                ].filter(Boolean)}
+                onChange={(e, newFormats) => {
+                  setEditingText({
+                    ...editingText,
+                    bold: newFormats.includes('bold'),
+                    italic: newFormats.includes('italic'),
+                  });
+                }}
+                aria-label="text formatting"
+              >
+                <ToggleButton value="bold" aria-label="bold">
+                  <FormatBoldIcon />
+                </ToggleButton>
+                <ToggleButton value="italic" aria-label="italic">
+                  <FormatItalicIcon />
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+
+            <Box>
+              <Typography variant="caption" color="text.secondary" gutterBottom>
+                Alignment
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                value={editingText?.align || 'left'}
+                onChange={(e, newAlign) => {
+                  if (newAlign) {
+                    setEditingText({ ...editingText, align: newAlign });
+                  }
+                }}
+                aria-label="text alignment"
+              >
+                <ToggleButton value="left" aria-label="left aligned">
+                  <FormatAlignLeftIcon />
+                </ToggleButton>
+                <ToggleButton value="center" aria-label="centered">
+                  <FormatAlignCenterIcon />
+                </ToggleButton>
+                <ToggleButton value="right" aria-label="right aligned">
+                  <FormatAlignRightIcon />
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTextEditDialog(false)}>Cancel</Button>
+          <Button onClick={handleTextSave} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
