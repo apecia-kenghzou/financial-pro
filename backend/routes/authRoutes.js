@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
-const { getCurrentUser, logout } = require('../controllers/authController');
+const { getCurrentUser, checkTokenStatus, logout } = require('../controllers/authController');
 const { isAuthenticated } = require('../middleware/auth');
 
 // @route   GET /api/auth/google
@@ -32,6 +32,11 @@ router.get('/google/callback',
 // @desc    Get current user
 // @access  Private
 router.get('/me', isAuthenticated, getCurrentUser);
+
+// @route   GET /api/auth/debug/tokens
+// @desc    Check if user has Google tokens (debugging)
+// @access  Private
+router.get('/debug/tokens', isAuthenticated, checkTokenStatus);
 
 // @route   POST /api/auth/logout
 // @desc    Logout user
