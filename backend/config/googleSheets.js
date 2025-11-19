@@ -108,20 +108,42 @@ const getGoogleSheetsClient = async (userTokens, userId = null) => {
  */
 const getUserSheets = async (userTokens, userId = null) => {
   try {
-    const { client: sheetsClient } = await getGoogleSheetsClient(userTokens, userId);
-
-    if (!sheetsClient || !sheetsClient._options || !sheetsClient._options.auth) {
-      return { success: false, message: 'Failed to initialize Sheets client' };
+    if (!userTokens || !userTokens.accessToken) {
+      logger.warn('No user tokens provided for getting sheets');
+      return { success: false, message: 'User not authenticated or no tokens available' };
     }
 
-    const drive = google.drive({ version: 'v3', auth: sheetsClient._options.auth });
+    // Refresh token if needed
+    const refreshedTokens = userId
+      ? await refreshTokenIfNeeded(userId, userTokens)
+      : userTokens;
 
+    // Create OAuth2 client
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      `${process.env.BACKEND_URL}/api/auth/google/callback`
+    );
+
+    // Set credentials with refreshed tokens
+    oauth2Client.setCredentials({
+      access_token: refreshedTokens.accessToken,
+      refresh_token: refreshedTokens.refreshToken,
+      expiry_date: refreshedTokens.expiryDate
+    });
+
+    // Create Drive API client with OAuth2 client
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+    // List user's spreadsheets
     const response = await drive.files.list({
       q: "mimeType='application/vnd.google-apps.spreadsheet'",
       fields: 'files(id, name, createdTime, modifiedTime)',
       orderBy: 'modifiedTime desc',
       pageSize: 20
     });
+
+    logger.info(`Successfully fetched ${response.data.files?.length || 0} sheets for user`);
 
     return {
       success: true,
@@ -138,7 +160,7 @@ const getUserSheets = async (userTokens, userId = null) => {
       return { success: false, error: 'Permission denied. Please grant access to Google Drive.' };
     }
 
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || 'Failed to fetch Google Sheets' };
   }
 };
 
