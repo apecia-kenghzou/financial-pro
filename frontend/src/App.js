@@ -11,6 +11,8 @@ import Home from './pages/Home';
 import CardEditor from './pages/CardEditor';
 import InvitationView from './pages/InvitationView';
 import Login from './pages/Login';
+import MyInvitations from './pages/MyInvitations';
+import RSVPDashboard from './pages/RSVPDashboard';
 
 function App() {
   return (
@@ -26,6 +28,9 @@ function App() {
                   <Route path="/" element={<Home />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/create" element={<CardEditor />} />
+                  <Route path="/edit/:cardId" element={<CardEditor />} />
+                  <Route path="/my-invitations" element={<MyInvitations />} />
+                  <Route path="/rsvp-dashboard/:cardId" element={<RSVPDashboard />} />
                   <Route path="/invitation/:cardId" element={<InvitationView />} />
                 </Routes>
               </Box>

@@ -17,6 +17,7 @@ import CreateIcon from '@mui/icons-material/Create';
 import HomeIcon from '@mui/icons-material/Home';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import LogoutIcon from '@mui/icons-material/Logout';
+import ListAltIcon from '@mui/icons-material/ListAlt';
 import { useUser } from '../context/UserContext';
 
 const Navbar = () => {
@@ -127,9 +128,13 @@ const Navbar = () => {
                 </Typography>
               </Box>
               <Divider />
+              <MenuItem onClick={() => { handleClose(); navigate('/my-invitations'); }}>
+                <ListAltIcon fontSize="small" sx={{ mr: 1 }} />
+                My Invitations
+              </MenuItem>
               <MenuItem onClick={() => { handleClose(); navigate('/create'); }}>
                 <CreateIcon fontSize="small" sx={{ mr: 1 }} />
-                My Invitations
+                Create New
               </MenuItem>
               <Divider />
               <MenuItem onClick={handleLogout}>

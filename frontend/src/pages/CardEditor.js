@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -28,17 +28,23 @@ import { invitationAPI } from '../services/api';
 
 const CardEditor = () => {
   const navigate = useNavigate();
+  const { cardId } = useParams(); // Get cardId from URL for edit mode
   const { isAuthenticated, loading: authLoading } = useUser();
   const {
     currentCard,
     setCurrentCard,
     canvasElements,
+    setCanvasElements,
     eventDetails,
+    setEventDetails,
     googleSheetId,
+    setGoogleSheetId,
+    resetCard,
   } = useCardContext();
 
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingCard, setLoadingCard] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [publishDialog, setPublishDialog] = useState(false);
   const [shareableLink, setShareableLink] = useState('');
@@ -49,6 +55,55 @@ const CardEditor = () => {
       navigate('/login', { state: { from: '/create' } });
     }
   }, [isAuthenticated, authLoading, navigate]);
+
+  // Load existing card for editing
+  useEffect(() => {
+    if (cardId && isAuthenticated) {
+      loadExistingCard(cardId);
+    } else if (!cardId) {
+      // Reset form when creating new card
+      resetCard();
+      setTitle('');
+    }
+  }, [cardId, isAuthenticated]);
+
+  const loadExistingCard = async (id) => {
+    try {
+      setLoadingCard(true);
+      const response = await invitationAPI.getById(id);
+      const card = response.data.data;
+
+      // Populate form fields
+      setTitle(card.title);
+      setCurrentCard(card);
+
+      // Populate canvas elements
+      if (card.canvasData && card.canvasData.elements) {
+        setCanvasElements(card.canvasData.elements);
+      }
+
+      // Populate event details
+      if (card.eventDetails) {
+        setEventDetails(card.eventDetails);
+      }
+
+      // Populate Google Sheet ID
+      if (card.googleSheetId) {
+        setGoogleSheetId(card.googleSheetId);
+      }
+
+    } catch (error) {
+      console.error('Error loading card:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to load invitation card',
+        severity: 'error',
+      });
+      navigate('/my-invitations');
+    } finally {
+      setLoadingCard(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -198,6 +253,15 @@ const CardEditor = () => {
     return null;
   }
 
+  // Show loading while card is being loaded
+  if (loadingCard) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', py: 4 }}>
       <Container maxWidth="xl">
@@ -205,7 +269,7 @@ const CardEditor = () => {
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={6}>
               <Typography variant="h4" component="h1" gutterBottom>
-                Create Your Invitation Card
+                {cardId ? 'Edit Your Invitation Card' : 'Create Your Invitation Card'}
               </Typography>
               <TextField
                 fullWidth
