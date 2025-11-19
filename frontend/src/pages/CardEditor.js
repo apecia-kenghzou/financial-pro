@@ -23,6 +23,7 @@ import ShareIcon from '@mui/icons-material/Share';
 import CanvasEditor from '../components/CanvasEditor';
 import EventDetailsForm from '../components/EventDetailsForm';
 import PageNavigator from '../components/PageNavigator';
+import AssetLibrary from '../components/AssetLibrary';
 import { useCardContext } from '../context/CardContext';
 import { useUser } from '../context/UserContext';
 import { invitationAPI } from '../services/api';
@@ -327,7 +328,10 @@ const CardEditor = () => {
 
         <Grid container spacing={3}>
           <Grid item xs={12} lg={8}>
-            <CanvasEditor />
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <CanvasEditor />
+              <AssetLibrary />
+            </Box>
           </Grid>
           <Grid item xs={12} lg={4}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
