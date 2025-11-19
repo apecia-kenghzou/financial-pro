@@ -22,6 +22,7 @@ import GetAppIcon from '@mui/icons-material/GetApp';
 import ShareIcon from '@mui/icons-material/Share';
 import CanvasEditor from '../components/CanvasEditor';
 import EventDetailsForm from '../components/EventDetailsForm';
+import PageNavigator from '../components/PageNavigator';
 import { useCardContext } from '../context/CardContext';
 import { useUser } from '../context/UserContext';
 import { invitationAPI } from '../services/api';
@@ -35,11 +36,15 @@ const CardEditor = () => {
     setCurrentCard,
     canvasElements,
     setCanvasElements,
+    pages,
+    setPages,
     eventDetails,
     setEventDetails,
     googleSheetId,
     setGoogleSheetId,
     resetCard,
+    loadLegacyCard,
+    A4_DIMENSIONS,
   } = useCardContext();
 
   const [title, setTitle] = useState('');
@@ -77,9 +82,15 @@ const CardEditor = () => {
       setTitle(card.title);
       setCurrentCard(card);
 
-      // Populate canvas elements
-      if (card.canvasData && card.canvasData.elements) {
-        setCanvasElements(card.canvasData.elements);
+      // Populate canvas - handle both multi-page and legacy formats
+      if (card.canvasData) {
+        if (card.canvasData.pages) {
+          // New multi-page format
+          setPages(card.canvasData.pages);
+        } else if (card.canvasData.elements) {
+          // Legacy single-page format - convert to pages
+          loadLegacyCard(card.canvasData.elements);
+        }
       }
 
       // Populate event details
@@ -115,10 +126,12 @@ const CardEditor = () => {
       return;
     }
 
-    if (canvasElements.length === 0) {
+    // Check if there's at least one element across all pages
+    const totalElements = pages.reduce((sum, page) => sum + page.elements.length, 0);
+    if (totalElements === 0) {
       setSnackbar({
         open: true,
-        message: 'Please add at least one image to your canvas',
+        message: 'Please add at least one element to your canvas',
         severity: 'error',
       });
       return;
@@ -138,8 +151,8 @@ const CardEditor = () => {
       const data = {
         title,
         canvasData: {
-          elements: canvasElements,
-          dimensions: { width: 800, height: 600 },
+          pages: pages,
+          dimensions: A4_DIMENSIONS,
         },
         eventDetails,
         googleSheetId,
@@ -207,8 +220,8 @@ const CardEditor = () => {
     const exportData = {
       title,
       canvasData: {
-        elements: canvasElements,
-        dimensions: { width: 800, height: 600 },
+        pages: pages,
+        dimensions: A4_DIMENSIONS,
       },
       eventDetails,
       googleSheetId,
@@ -286,7 +299,7 @@ const CardEditor = () => {
                   variant="outlined"
                   startIcon={<GetAppIcon />}
                   onClick={handleExportJSON}
-                  disabled={canvasElements.length === 0}
+                  disabled={pages.reduce((sum, p) => sum + p.elements.length, 0) === 0}
                 >
                   Export JSON
                 </Button>
@@ -317,7 +330,10 @@ const CardEditor = () => {
             <CanvasEditor />
           </Grid>
           <Grid item xs={12} lg={4}>
-            <EventDetailsForm />
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <PageNavigator />
+              <EventDetailsForm />
+            </Box>
           </Grid>
         </Grid>
       </Container>
