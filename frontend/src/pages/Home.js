@@ -160,10 +160,11 @@ const Home = () => {
                   textAlign: 'center',
                   p: 3,
                   borderRadius: 3,
-                  transition: 'all 0.3s ease',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  cursor: 'pointer',
                   '&:hover': {
-                    transform: 'translateY(-12px)',
-                    boxShadow: '0 12px 32px rgba(0,0,0,0.1)',
+                    transform: 'translateY(-12px) scale(1.02)',
+                    boxShadow: '0 16px 40px rgba(102, 126, 234, 0.2)',
                   },
                 }}
               >

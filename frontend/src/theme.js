@@ -66,8 +66,14 @@ const theme = createTheme({
           padding: '10px 20px',
           fontSize: '1rem',
           boxShadow: 'none',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            transform: 'translateY(-2px)',
+          },
+          '@media (max-width: 600px)': {
+            minHeight: '44px', // Better touch targets on mobile
+            padding: '12px 24px',
           },
         },
         contained: {
@@ -77,10 +83,24 @@ const theme = createTheme({
         },
       },
     },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          transition: 'all 0.2s ease',
+          '&:hover': {
+            transform: 'scale(1.1)',
+          },
+          '@media (max-width: 600px)': {
+            padding: '12px', // Larger touch targets on mobile
+          },
+        },
+      },
+    },
     MuiCard: {
       styleOverrides: {
         root: {
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24)',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
           },
@@ -92,6 +112,22 @@ const theme = createTheme({
         root: {
           '& .MuiOutlinedInput-root': {
             borderRadius: 8,
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: '#6366f1',
+              },
+            },
+          },
+        },
+      },
+    },
+    MuiFab: {
+      styleOverrides: {
+        root: {
+          '@media (max-width: 600px)': {
+            width: '56px',
+            height: '56px',
           },
         },
       },

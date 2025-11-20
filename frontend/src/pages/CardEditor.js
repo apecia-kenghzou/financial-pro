@@ -24,9 +24,11 @@ import CanvasEditor from '../components/CanvasEditor';
 import EventDetailsForm from '../components/EventDetailsForm';
 import PageNavigator from '../components/PageNavigator';
 import AssetLibrary from '../components/AssetLibrary';
+import SaveIndicator from '../components/SaveIndicator';
 import { useCardContext } from '../context/CardContext';
 import { useUser } from '../context/UserContext';
 import { invitationAPI } from '../services/api';
+import confetti from 'canvas-confetti';
 
 const CardEditor = () => {
   const navigate = useNavigate();
@@ -54,6 +56,8 @@ const CardEditor = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [publishDialog, setPublishDialog] = useState(false);
   const [shareableLink, setShareableLink] = useState('');
+  const [saveStatus, setSaveStatus] = useState('saved'); // 'saving', 'saved', 'error', 'unsaved'
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Protect route - redirect to login if not authenticated
   useEffect(() => {
@@ -72,6 +76,39 @@ const CardEditor = () => {
       setTitle('');
     }
   }, [cardId, isAuthenticated]);
+
+  // Track unsaved changes
+  useEffect(() => {
+    if (currentCard) {
+      setHasUnsavedChanges(true);
+      setSaveStatus('unsaved');
+    }
+  }, [pages, eventDetails, title, googleSheetId]);
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (!hasUnsavedChanges || !currentCard) return;
+
+    const timer = setTimeout(() => {
+      handleAutoSave();
+    }, 3000); // Auto-save after 3 seconds of inactivity
+
+    return () => clearTimeout(timer);
+  }, [hasUnsavedChanges, pages, eventDetails, title, googleSheetId]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Ctrl/Cmd + S to save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [title, pages, eventDetails, googleSheetId]);
 
   const loadExistingCard = async (id) => {
     try {
@@ -148,6 +185,7 @@ const CardEditor = () => {
     }
 
     setLoading(true);
+    setSaveStatus('saving');
     try {
       const data = {
         title,
@@ -167,6 +205,8 @@ const CardEditor = () => {
       }
 
       setCurrentCard(response.data.data);
+      setSaveStatus('saved');
+      setHasUnsavedChanges(false);
       setSnackbar({
         open: true,
         message: 'Invitation card saved successfully!',
@@ -174,6 +214,7 @@ const CardEditor = () => {
       });
     } catch (error) {
       console.error('Error saving card:', error);
+      setSaveStatus('error');
       setSnackbar({
         open: true,
         message: 'Failed to save invitation card',
@@ -181,6 +222,30 @@ const CardEditor = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAutoSave = async () => {
+    if (!title.trim() || !currentCard) return;
+
+    setSaveStatus('saving');
+    try {
+      const data = {
+        title,
+        canvasData: {
+          pages: pages,
+          dimensions: A4_DIMENSIONS,
+        },
+        eventDetails,
+        googleSheetId,
+      };
+
+      await invitationAPI.update(currentCard.cardId, data);
+      setSaveStatus('saved');
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('Auto-save error:', error);
+      setSaveStatus('error');
     }
   };
 
@@ -200,6 +265,14 @@ const CardEditor = () => {
       const link = response.data.data.shareableLink;
       setShareableLink(link);
       setPublishDialog(true);
+
+      // Celebrate with confetti!
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+
       setSnackbar({
         open: true,
         message: 'Invitation published successfully!',
@@ -295,7 +368,8 @@ const CardEditor = () => {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', flexWrap: 'wrap', alignItems: 'center' }}>
+                <SaveIndicator status={saveStatus} />
                 <Button
                   variant="outlined"
                   startIcon={<GetAppIcon />}

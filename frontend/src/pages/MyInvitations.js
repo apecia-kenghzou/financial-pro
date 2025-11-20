@@ -15,7 +15,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress,
   Alert,
   Snackbar,
 } from '@mui/material';
@@ -24,9 +23,12 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ShareIcon from '@mui/icons-material/Share';
 import PeopleIcon from '@mui/icons-material/People';
 import AddIcon from '@mui/icons-material/Add';
+import CreateIcon from '@mui/icons-material/Create';
 import { format } from 'date-fns';
 import { invitationAPI } from '../services/api';
 import { useUser } from '../context/UserContext';
+import EmptyState from '../components/EmptyState';
+import { InvitationCardSkeleton } from '../components/LoadingSkeleton';
 
 const MyInvitations = () => {
   const navigate = useNavigate();
@@ -103,8 +105,15 @@ const MyInvitations = () => {
 
   if (authLoading || loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
-        <CircularProgress />
+      <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', py: 4 }}>
+        <Container maxWidth="lg">
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h4" component="h1" fontWeight={600}>
+              My Invitations
+            </Typography>
+          </Box>
+          <InvitationCardSkeleton count={6} />
+        </Container>
       </Box>
     );
   }
@@ -137,21 +146,13 @@ const MyInvitations = () => {
         )}
 
         {invitations.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 8 }}>
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              No invitations yet
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Create your first invitation card to get started
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => navigate('/create')}
-            >
-              Create Invitation
-            </Button>
-          </Box>
+          <EmptyState
+            icon={<CreateIcon />}
+            title="No Invitations Yet"
+            description="Start creating beautiful invitation cards for your special events. Design stunning invitations with our drag-and-drop editor, add event details, and share with your guests in minutes!"
+            actionLabel="Create Your First Invitation"
+            onAction={() => navigate('/create')}
+          />
         ) : (
           <Grid container spacing={3}>
             {invitations.map((invitation) => (
@@ -161,8 +162,11 @@ const MyInvitations = () => {
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    cursor: 'pointer',
                     '&:hover': {
-                      boxShadow: 6,
+                      transform: 'translateY(-8px)',
+                      boxShadow: '0 12px 24px rgba(0,0,0,0.15)',
                     },
                   }}
                 >
